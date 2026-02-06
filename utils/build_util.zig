@@ -156,6 +156,15 @@ pub const RunProtocStep = struct {
         self.step.name = name;
     }
 
+    fn runChildProcess(step: *std.Build.Step, make_opt: std.Build.Step.MakeOptions, argv: []const []const u8) anyerror!void {
+        // `captureChildProcess` stores the failed command in `result_failed_command`
+        // and asserts this field is null on entry. This step can run more than one
+        // subprocess (`protoc` + `zig fmt`), so clear it between invocations.
+        step.result_failed_command = null;
+        const run_result = try step.captureChildProcess(make_opt.gpa, make_opt.progress_node, argv);
+        try step.handleChildProcessTerm(run_result.term);
+    }
+
     fn make(step: *std.Build.Step, make_opt: std.Build.Step.MakeOptions) anyerror!void {
         const b = step.owner;
         const self: *RunProtocStep = @fieldParentPtr("step", step);
@@ -204,8 +213,7 @@ pub const RunProtocStep = struct {
                     std.debug.print("\n", .{});
                 }
 
-                const run_result = try step.captureChildProcess(make_opt.gpa, make_opt.progress_node, argv.items);
-                try step.handleChildProcessTerm(run_result.term);
+                try runChildProcess(step, make_opt, argv.items);
             }
         }
 
@@ -216,8 +224,7 @@ pub const RunProtocStep = struct {
             try argv.append(b.allocator, "fmt");
             try argv.append(b.allocator, absolute_dest_dir);
 
-            const run_result = try step.captureChildProcess(make_opt.gpa, make_opt.progress_node, argv.items);
-            try step.handleChildProcessTerm(run_result.term);
+            try runChildProcess(step, make_opt, argv.items);
         }
     }
 };
