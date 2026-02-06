@@ -4,15 +4,15 @@ const builtin = @import("builtin");
 pub const PROTOC_VERSION = "32.1";
 
 // File system utilities
-pub fn dirExists(path: []const u8) bool {
-    var dir = std.fs.openDirAbsolute(path, .{}) catch return false;
-    dir.close();
+pub fn dirExists(io: std.Io, path: []const u8) bool {
+    const dir = std.Io.Dir.openDirAbsolute(io, path, .{}) catch return false;
+    defer dir.close(io);
     return true;
 }
 
-pub fn fileExists(path: []const u8) bool {
-    var file = std.fs.openFileAbsolute(path, .{}) catch return false;
-    file.close();
+pub fn fileExists(io: std.Io, path: []const u8) bool {
+    const file = std.Io.Dir.openFileAbsolute(io, path, .{}) catch return false;
+    defer file.close(io);
     return true;
 }
 
@@ -31,11 +31,11 @@ pub fn ensureProtocBinaryDownloaded(
     b: *std.Build,
 ) !?[]const u8 {
     if (try getProtocBin(b)) |executable_path| {
-        if (fileExists(executable_path)) {
+        if (fileExists(b.graph.io, executable_path)) {
             return executable_path;
         }
 
-        if (!fileExists(executable_path)) {
+        if (!fileExists(b.graph.io, executable_path)) {
             std.log.err("zig-protobuf: file not found: {s}", .{executable_path});
             std.process.exit(1);
         }
@@ -157,7 +157,6 @@ pub const RunProtocStep = struct {
     }
 
     fn make(step: *std.Build.Step, make_opt: std.Build.Step.MakeOptions) anyerror!void {
-        _ = make_opt;
         const b = step.owner;
         const self: *RunProtocStep = @fieldParentPtr("step", step);
 
@@ -183,8 +182,8 @@ pub const RunProtocStep = struct {
                     u8,
                     &.{ "--zig_out=", absolute_dest_dir },
                 ));
-                if (!dirExists(absolute_dest_dir)) {
-                    try std.fs.makeDirAbsolute(absolute_dest_dir);
+                if (!dirExists(b.graph.io, absolute_dest_dir)) {
+                    try std.Io.Dir.cwd().createDirPath(b.graph.io, absolute_dest_dir);
                 }
 
                 for (self.include_directories) |it| {
@@ -205,7 +204,8 @@ pub const RunProtocStep = struct {
                     std.debug.print("\n", .{});
                 }
 
-                _ = try step.evalChildProcess(argv.items);
+                const run_result = try step.captureChildProcess(make_opt.gpa, make_opt.progress_node, argv.items);
+                try step.handleChildProcessTerm(run_result.term);
             }
         }
 
@@ -216,7 +216,8 @@ pub const RunProtocStep = struct {
             try argv.append(b.allocator, "fmt");
             try argv.append(b.allocator, absolute_dest_dir);
 
-            _ = try step.evalChildProcess(argv.items);
+            const run_result = try step.captureChildProcess(make_opt.gpa, make_opt.progress_node, argv.items);
+            try step.handleChildProcessTerm(run_result.term);
         }
     }
 };

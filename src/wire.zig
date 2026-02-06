@@ -428,7 +428,7 @@ pub fn decodeRepeated(
                 var consumed: usize = 0;
                 while (consumed < bytes) {
                     const raw, const c = try decodeScalar(.int32, reader);
-                    const decoded = std.meta.intToEnum(Result, raw) catch {
+                    const decoded = std.enums.fromInt(Result, raw) orelse {
                         @branchHint(.cold);
                         return error.InvalidInput;
                     };
@@ -444,7 +444,7 @@ pub fn decodeRepeated(
             // Unpacked repeated enum.
             else {
                 const raw, const consumed = try decodeScalar(.int32, reader);
-                const decoded = std.meta.intToEnum(Result, raw) catch {
+                const decoded = std.enums.fromInt(Result, raw) orelse {
                     @branchHint(.cold);
                     return error.InvalidInput;
                 };
@@ -642,14 +642,14 @@ pub fn decodeMessage(
                     consumed += c;
                     const decoded = b: {
                         if (comptime field_ti == .optional) {
-                            break :b std.meta.intToEnum(
+                            break :b std.enums.fromInt(
                                 field_ti.optional.child,
                                 raw,
                             );
                         } else {
-                            break :b std.meta.intToEnum(Field, raw);
+                            break :b std.enums.fromInt(Field, raw);
                         }
-                    } catch {
+                    } orelse {
                         @branchHint(.cold);
                         return error.InvalidInput;
                     };
@@ -893,10 +893,10 @@ pub fn decodeMessage(
                                 const raw, const c =
                                     try decodeScalar(.int32, reader);
                                 consumed += c;
-                                const decoded = std.meta.intToEnum(
+                                const decoded = std.enums.fromInt(
                                     oo_field.type,
                                     raw,
-                                ) catch {
+                                ) orelse {
                                     @branchHint(.cold);
                                     return error.InvalidInput;
                                 };
